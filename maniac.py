@@ -23,6 +23,62 @@ def run_bot():
         async def on_ready():
             print(f'{client.user} puso ese cumbion')
 
+        async def play_next(ctx,*,link):
+            if queues[ctx.guild.id] != []:
+                link=queues[ctx.guild.id].pop(0)
+                await play(ctx,link=link)
+
+        @client.command(name="play")
+        async def play(ctx,*,link):
+            try:
+                voice_client =await ctx.author.voice.channel.connect()
+                voice_clients[voice_client.guild.id]=voice_client 
+            except Exception as e:
+                print(e)
+
+            try:
+                url=link
+
+                loop=asyncio.get_event_loop()
+                data=await loop.run_in_executor(None,lambda:ytdl.extract_info(url,download=False))
+
+                song=data['url']
+                
+                if voice_clients[ctx.guild.id].isplaying():
+                    queues[ctx.guild.id].push(ctx)
+                else:
+                    player=discord.FFmpegOpusAudio(song,**FFMPEG_OPTIONS)
+                    voice_clients[ctx.guild.id].play(player,after=lambda e:asyncio.run_coroutine_threadsafe(play_next(ctx),client.loop))
+            except Exception as e:
+                print('ERROR EN PLAY')
+                print(e)
+            
+        @client.command(name="pause")
+        async def pause(ctx):
+            try:
+                voice_clients[ctx.guid.id].pause()
+            except Exception as e:
+                print('ERROR EN PAUSA')
+                print(e)
+
+        @client.command(name="resume")
+        async def resume(ctx):
+            try:
+                voice_clients[ctx.guid.id].resume()
+            except Exception as e:
+                print('ERROR EN RESUME')
+                print(e)
+
+        @client.command(name="stop")
+        async def stop(ctx):
+            try:
+                voice_clients[ctx.guild.id].stop()
+                await voice_clients[ctx.guild.id].disconnect()
+            except Exception as e:
+                print('ERROR EN STOP')
+                print(e)   
+        client.run(TOKEN)    
+""""
         @client.event
         async def on_message(message):
             if message.content.startswith("?play"):
@@ -43,12 +99,28 @@ def run_bot():
 
                     voice_clients[message.guild.id].play(player)
                 except Exception as e:
-                        print('ERROR ACA')
-                        print(e)
-        client.run(TOKEN)                     
-
-
-"""
+                    print('ERROR EN PLAY')
+                    print(e)
+            if message.content.startswith("?pause"):
+                try:
+                    voice_client[message.guid.id].pause()
+                except Exception as e:
+                    print('ERROR EN PAUSA')
+                    print(e)
+            if message.content.startswith("?resume"):
+                try:
+                    voice_client[message.guild.id].resume()
+                except Exception as e:
+                    print('ERROR EN RESUME')
+                    print(e)
+            if message.content.startswith("?stop"):
+                try:
+                    voice_client[message.guild.id].stop()
+                    await voice_clients[message.guild.id].disconnect()
+                except Exception as e:
+                    print('ERROR EN STOP')
+                    print(e)
+                    
 intents=discord.Intents.default()
 intents.message_content=True
 intents.voice_states=True
