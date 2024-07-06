@@ -1,4 +1,6 @@
 import discord
+from discord.ext import commands
+import traceback
 import os
 import yt_dlp
 import asyncio
@@ -10,7 +12,7 @@ def run_bot():
         intents = discord.Intents.default()
         intents.message_content=True
         intents.voice_states=True
-        client=discord.Client(intents=intents)
+        client=commands.Bot(command_prefix=".",intents=intents)
 
         queues = {}
         voice_clients={}
@@ -23,34 +25,46 @@ def run_bot():
         async def on_ready():
             print(f'{client.user} puso ese cumbion')
 
-        async def play_next(ctx,*,link):
+        async def play_next(ctx):
             if queues[ctx.guild.id] != []:
                 link=queues[ctx.guild.id].pop(0)
                 await play(ctx,link=link)
 
+        def is_connected(ctx):
+            voice_client = discord.utils.get(ctx.bot.voice_clients, guild=ctx.guild)
+            return voice_client
+
         @client.command(name="play")
         async def play(ctx,*,link):
             try:
-                voice_client =await ctx.author.voice.channel.connect()
-                voice_clients[voice_client.guild.id]=voice_client 
+                if not is_connected(ctx):
+                    voice_channel=ctx.author.voice.channel if ctx.author.voice else None
+                    if not voice_channel:
+                        return await ctx.send("No estas en ningun canal D:")
+                    if not ctx.voice_client:
+                        voice_client =await ctx.author.voice.channel.connect()
+                        voice_clients[voice_client.guild.id]=voice_client 
+                
             except Exception as e:
                 print(e)
 
             try:
                 url=link
-
-                loop=asyncio.get_event_loop()
-                data=await loop.run_in_executor(None,lambda:ytdl.extract_info(url,download=False))
-
-                song=data['url']
-                
-                if voice_clients[ctx.guild.id].isplaying():
-                    queues[ctx.guild.id].push(ctx)
+                if ctx.voice_client.is_playing():
+                    if ctx.guild.id not in queues:
+                        queues[ctx.guild.id] = []
+                    queues[ctx.guild.id].append(url)
+                    await ctx.send("Añadido un temon a la cola!")
                 else:
+                    loop=asyncio.get_event_loop()
+                    data=await loop.run_in_executor(None,lambda:ytdl.extract_info(url,download=False))
+
+                    song=data['url']
                     player=discord.FFmpegOpusAudio(song,**FFMPEG_OPTIONS)
                     voice_clients[ctx.guild.id].play(player,after=lambda e:asyncio.run_coroutine_threadsafe(play_next(ctx),client.loop))
             except Exception as e:
                 print('ERROR EN PLAY')
+                print(traceback.format_exc())
                 print(e)
             
         @client.command(name="pause")
@@ -120,7 +134,7 @@ def run_bot():
                 except Exception as e:
                     print('ERROR EN STOP')
                     print(e)
-                    
+
 intents=discord.Intents.default()
 intents.message_content=True
 intents.voice_states=True
